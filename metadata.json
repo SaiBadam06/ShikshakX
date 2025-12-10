@@ -1,0 +1,5 @@
+{
+  "name": "ShikshakX - AI-Powered Learning Companion",
+  "description": "A modern, responsive web application for students to manage courses, materials, tasks, and interact with AI-powered learning tools. It features RAG-based Q&A, an AI Tutor, task management with Google Calendar integration, and a personal notes and materials library.",
+  "requestFramePermissions": []
+}
