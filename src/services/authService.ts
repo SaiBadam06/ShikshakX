@@ -1,10 +1,11 @@
-import { 
-  signInWithPopup, 
+import {
+  signInWithPopup,
   signOut as firebaseSignOut,
   onAuthStateChanged,
-  User
+  User,
+  GoogleAuthProvider
 } from 'firebase/auth';
-import { auth, googleProvider } from './firebase';
+import { auth, googleProvider } from '../../services/firebase';
 
 // Sign in with Google
 export const signInWithGoogle = async () => {

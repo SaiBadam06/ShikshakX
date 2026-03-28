@@ -1,21 +1,141 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ShikshakX - AI Learning Companion</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <script src="https://apis.google.com/js/api.js"></script>
-    <script src="https://accounts.google.com/gsi/client"></script>
-    <style>
-      body {
-        font-family: 'Inter', sans-serif;
-      }
-    </style>
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ShikshakX - AI Learning Companion</title>
+  <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      plugins: [tailwind.plugin && tailwind.plugin.withOptions ? tailwind.plugin : null].filter(Boolean)
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://apis.google.com/js/api.js"></script>
+  <script src="https://accounts.google.com/gsi/client"></script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+
+    /* Custom generic markdown styles for AI Chat */
+    .ai-markdown h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-top: 1rem;
+      margin-bottom: 0.5rem;
+      color: #1e293b;
+    }
+
+    .dark .ai-markdown h1 {
+      color: #f1f5f9;
+    }
+
+    .ai-markdown h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-top: 1rem;
+      margin-bottom: 0.5rem;
+      color: #334155;
+    }
+
+    .dark .ai-markdown h2 {
+      color: #e2e8f0;
+    }
+
+    .ai-markdown h3 {
+      font-size: 1.125rem;
+      font-weight: 600;
+      margin-top: 0.75rem;
+      margin-bottom: 0.5rem;
+      color: #475569;
+    }
+
+    .dark .ai-markdown h3 {
+      color: #cbd5e1;
+    }
+
+    .ai-markdown p {
+      margin-bottom: 0.75rem;
+      line-height: 1.6;
+    }
+
+    .ai-markdown p:last-child {
+      margin-bottom: 0;
+    }
+
+    .ai-markdown ul {
+      list-style-type: disc;
+      padding-left: 1.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .ai-markdown ol {
+      list-style-type: decimal;
+      padding-left: 1.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .ai-markdown li {
+      margin-bottom: 0.25rem;
+    }
+
+    .ai-markdown strong {
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .dark .ai-markdown strong {
+      color: #ffffff;
+    }
+
+    .ai-markdown code {
+      background-color: #f1f5f9;
+      color: #0284c7;
+      padding: 0.125rem 0.25rem;
+      border-radius: 0.25rem;
+      font-size: 0.875em;
+      font-family: monospace;
+    }
+
+    .dark .ai-markdown code {
+      background-color: #1e293b;
+      color: #38bdf8;
+    }
+
+    .ai-markdown pre {
+      background-color: #1e293b;
+      color: #f8fafc;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      overflow-x: auto;
+      margin-bottom: 1rem;
+    }
+
+    .ai-markdown pre code {
+      background-color: transparent;
+      color: inherit;
+      padding: 0;
+    }
+
+    .ai-markdown blockquote {
+      border-left: 4px solid #cbd5e1;
+      padding-left: 1rem;
+      margin-left: 0;
+      color: #64748b;
+      font-style: italic;
+    }
+
+    .dark .ai-markdown blockquote {
+      border-left-color: #475569;
+      color: #94a3b8;
+    }
+  </style>
   <script type="importmap">
 {
   "imports": {
@@ -29,10 +149,12 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
+  <link rel="stylesheet" href="/index.css">
 </head>
-  <body class="bg-slate-100 dark:bg-slate-900">
-    <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
-  </body>
+
+<body class="bg-slate-100 dark:bg-slate-900">
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+
 </html>

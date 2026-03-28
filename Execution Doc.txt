@@ -1,0 +1,17 @@
+Start Ollama Server (in a separate terminal):
+bash
+ollama serve
+Pull Required Models (if not already done):
+bash
+ollama pull llama3.2
+ollama pull nomic-embed-text
+Start Your Application (in a new terminal):
+bash
+npm run dev
+For Testing RAG (in another terminal):
+bash
+# To test the RAG system
+npm run test:rag
+
+# To test Pinecone connection
+npm run test:pinecone

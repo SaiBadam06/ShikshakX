@@ -12,7 +12,7 @@ export const DUMMY_COURSES: Omit<Course, 'id'>[] = [
     coverImage: 'https://images.unsplash.com/photo-1555255707-c07969078f6a?q=80&w=2070&auto=format&fit=crop',
     url: 'https://www.coursera.org/learn/machine-learning',
   },
-   {
+  {
     title: 'Database Management Systems',
     description: 'A comprehensive course covering foundational and advanced topics in database design, theory, and management.',
     instructor: 'University Content',
@@ -40,7 +40,7 @@ export const DUMMY_COURSES: Omit<Course, 'id'>[] = [
     coverImage: 'https://images.unsplash.com/photo-1674071425684-36e398436531?q=80&w=1925&auto=format&fit=crop',
     url: 'https://introtodeeplearning.com',
   },
-   {
+  {
     title: 'Google\'s ML Crash Course',
     description: 'A fast-paced, practical introduction to machine learning with interactive visualizations and exercises.',
     instructor: 'Google',

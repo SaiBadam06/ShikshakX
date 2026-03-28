@@ -22,11 +22,14 @@
     "@pinecone-database/pinecone": "^6.1.2",
     "antd": "^5.27.6",
     "firebase": "^12.4.0",
+    "groq-sdk": "^0.37.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^7.9.4"
   },
   "devDependencies": {
+    "@tailwindcss/typography": "^0.5.19",
     "@testing-library/jest-dom": "^6.4.2",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",

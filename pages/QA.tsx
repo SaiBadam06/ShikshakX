@@ -4,6 +4,7 @@ import { apiClient } from '../services/apiClient';
 import { generateAiTutorResponse } from '../services/geminiService';
 import { PaperAirplaneIcon, BeakerIcon, AcademicCapIcon } from '@heroicons/react/24/solid';
 import type { User } from 'firebase/auth';
+import ReactMarkdown from 'react-markdown';
 
 interface QAProps {
   user: User;
@@ -11,17 +12,24 @@ interface QAProps {
 
 type ChatMode = 'rag' | 'ai_tutor';
 
+
 const ChatBubble: React.FC<{ message: ChatMessage }> = ({ message }) => {
   const isUser = message.sender === 'user';
   return (
     <div className={`flex items-start gap-3 ${isUser ? 'justify-end' : ''}`}>
-      {!isUser && 
+      {!isUser &&
         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex-shrink-0 flex items-center justify-center text-white font-bold text-sm">
           AI
         </div>
       }
       <div className={`max-w-xl p-4 rounded-2xl shadow-sm ${isUser ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-700'}`}>
-        <p className="text-sm leading-relaxed">{message.text}</p>
+        {isUser ? (
+          <p className="text-sm leading-relaxed">{message.text}</p>
+        ) : (
+          <div className="text-sm leading-relaxed ai-markdown max-w-none">
+            <ReactMarkdown>{message.text}</ReactMarkdown>
+          </div>
+        )}
         {!isUser && message.sources && message.sources.length > 0 && (
           <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-600">
             <h4 className="text-xs font-bold mb-1 text-slate-500 dark:text-slate-400">SOURCES:</h4>
@@ -40,6 +48,7 @@ const ChatBubble: React.FC<{ message: ChatMessage }> = ({ message }) => {
     </div>
   );
 };
+
 
 const welcomeMessage: ChatMessage = {
   id: 'welcome-message',
@@ -74,13 +83,13 @@ const QA: React.FC<QAProps> = ({ user }) => {
         botResponse = await apiClient.ragChat(input, scope, user);
       } else {
         const history = messages.map(m => ({
-            role: m.sender as 'user' | 'bot',
-            parts: [{ text: m.text }]
+          role: m.sender as 'user' | 'bot',
+          parts: [{ text: m.text }]
         }));
         const responseText = await generateAiTutorResponse(input, history);
         botResponse = { text: responseText, sources: [] };
       }
-      
+
       const botMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         text: botResponse.text,
@@ -107,10 +116,10 @@ const QA: React.FC<QAProps> = ({ user }) => {
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Q & A</h1>
         <div className="mt-4 flex space-x-1 bg-slate-200 dark:bg-slate-900 p-1 rounded-lg">
           <button onClick={() => setMode('rag')} className={`w-full py-2 rounded-md text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${mode === 'rag' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400'}`}>
-            <BeakerIcon className="h-5 w-5"/>RAG Chat
+            <BeakerIcon className="h-5 w-5" />RAG Chat
           </button>
           <button onClick={() => setMode('ai_tutor')} className={`w-full py-2 rounded-md text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${mode === 'ai_tutor' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400'}`}>
-            <AcademicCapIcon className="h-5 w-5"/>AI Tutor
+            <AcademicCapIcon className="h-5 w-5" />AI Tutor
           </button>
         </div>
       </div>
@@ -119,8 +128,8 @@ const QA: React.FC<QAProps> = ({ user }) => {
         {messages.map(msg => <ChatBubble key={msg.id} message={msg} />)}
         {isLoading && (
           <div className="flex items-start gap-3">
-             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex-shrink-0" />
-             <div className="max-w-xl p-4 rounded-2xl bg-white dark:bg-slate-700 shadow-sm">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex-shrink-0" />
+            <div className="max-w-xl p-4 rounded-2xl bg-white dark:bg-slate-700 shadow-sm">
               <div className="flex items-center space-x-1">
                 <span className="h-2 w-2 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
                 <span className="h-2 w-2 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>

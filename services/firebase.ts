@@ -9,7 +9,6 @@ import {
   browserSessionPersistence
 } from "firebase/auth";
 import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
-
 // Firebase configuration from environment variables
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -19,19 +18,16 @@ const firebaseConfig = {
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
-
 // Initialize Firebase
 let app;
 let auth;
 let db;
 let googleProvider;
-
 try {
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
   db = getFirestore(app);
   googleProvider = new GoogleAuthProvider();
-  
   // Enable offline persistence
   enableIndexedDbPersistence(db).catch((err) => {
     if (err.code === 'failed-precondition') {
@@ -40,17 +36,14 @@ try {
       console.warn('The current browser doesn\'t support offline persistence.');
     }
   });
-  
   console.log('Firebase initialized successfully');
 } catch (error) {
   console.error('Firebase initialization error:', error);
   throw new Error('Failed to initialize Firebase services');
 }
-
 // Add scopes if needed
 googleProvider.addScope('profile');
 googleProvider.addScope('email');
-
 // Set persistence
 const initAuthPersistence = async () => {
   try {
@@ -60,10 +53,8 @@ const initAuthPersistence = async () => {
     console.error("Error setting auth persistence:", error);
   }
 };
-
 // Initialize auth persistence
 initAuthPersistence();
-
 // Export the services and auth utilities for easy access
 export { 
   app, 
