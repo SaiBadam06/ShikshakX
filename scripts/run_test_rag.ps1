@@ -1,0 +1,3 @@
+$env:VITE_PINECONE_API_KEY=$env:VITE_PINECONE_API_KEY
+$env:VITE_PINECONE_ENVIRONMENT="gcp-starter"
+npm run test:rag
