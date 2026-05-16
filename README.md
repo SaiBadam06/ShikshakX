@@ -1,164 +1,127 @@
-# ShikshakX - Local Development & Setup Guide
+# ShikshakX
 
-Welcome to ShikshakX! This guide provides detailed, step-by-step instructions to get the application running on your local computer. Following these steps carefully will help you avoid common configuration errors.
+ShikshakX is an AI-powered learning workspace built with React, Vite, Firebase, and Groq-powered study features. It includes courses, materials, notes, tasks, planner, assessments, community, Q&A, and Google Calendar sync.
 
-## 🎯 What You'll Achieve
-By the end of this guide, you will have a fully functional local version of the ShikshakX application connected to your own private backend services.
+## Run locally
 
----
+1. Install Node.js 18 or newer.
+2. Open a terminal in the project root.
+3. Install dependencies:
 
-## 🛠️ Prerequisites
+```bash
+npm install
+```
 
-Before you begin, ensure you have the following software installed on your computer:
+4. Copy the environment template:
 
-1.  **Node.js**: This is the environment that runs the application. You can download it from [nodejs.org](https://nodejs.org/). Version 18 or higher is recommended.
-2.  **A Code Editor**: A good editor will make the process much easier. [Visual Studio Code](https://code.visualstudio.com/) is a free and popular choice.
-3.  **A Web Browser**: Such as Google Chrome or Firefox.
+```bash
+copy .env.example .env
+```
 
----
+5. Fill in the values inside `.env`.
+6. Start the app:
 
-## 🚀 Step-by-Step Installation
+```bash
+npm run dev
+```
 
-### Step 1: Get the Project Files & Install Dependencies
+7. Open the local URL shown by Vite, usually `http://localhost:5173`.
 
-First, you need to have the project files on your computer and install the necessary software libraries.
+## Build for production
 
-1.  **Unzip the Files**: Make sure all the project files you received are in a single folder on your computer (e.g., `C:\Projects\ShikshakX` or `~/dev/shikshakx`).
-2.  **Open a Terminal**:
-    *   **On Windows**: Open the Start Menu, type `cmd` or `powershell`, and press Enter.
-    *   **On macOS/Linux**: Open the "Terminal" application.
-3.  **Navigate to the Project Folder**: In your terminal, use the `cd` (change directory) command to go into the project folder.
-    ```bash
-    # Example for Windows
-    cd C:\Projects\ShikshakX
+```bash
+npm run build
+```
 
-    # Example for macOS/Linux
-    cd ~/dev/shikshakx
-    ```
-4.  **Install Dependencies**: Run the following command. This will read the `package.json` file and download all the required libraries (like React, Firebase, etc.) into a `node_modules` folder. This might take a few minutes.
-    ```bash
-    npm install
-    ```
+To preview the production build locally:
 
-### Step 2: Configure Firebase (The Most Important Step!)
+```bash
+npm run preview
+```
 
-The application uses Google Firebase for its database. **Mistakes in this step are the #1 cause of common errors**.
+## Required environment variables
 
-> ✨ **Good News:** To avoid any mandatory billing screens, this version of the app **does not use Firebase Storage**. You only need to set up Authentication and the Firestore Database.
+Create a `.env` file in the project root with these variables:
 
-1.  **Create a Firebase Project**:
-    *   Go to the [Firebase Console](https://console.firebase.google.com/) and sign in with your Google account.
-    *   Click **"Add project"** and give it a name (e.g., "My ShikshakX App"). Follow the on-screen steps.
+```env
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
 
-2.  **Create a Web App**:
-    *   Inside your new Firebase project, you'll see an overview page. Click the **Web icon** (`</>`) to create a new web application.
-    *   Give it a nickname (e.g., "ShikshakX Web") and click **"Register app"**.
-    *   Firebase will show you a `firebaseConfig` object. **Copy this entire object.**
+VITE_GOOGLE_API_KEY=
+VITE_GOOGLE_CLIENT_ID=
 
-3.  **Add Your Config to the Code**:
-    *   In your code editor, open the file: `src/services/firebase.ts`.
-    *   You will see a placeholder `firebaseConfig` object. **Delete the entire placeholder object and paste your own config that you just copied.**
+VITE_GROQ_API_KEY=
+```
 
-4.  **Set Up Firestore Database**:
-    *   In the Firebase Console, go to **Build > Firestore Database** from the left menu.
-    *   Click **"Create database"**.
-    *   Choose to start in **Production mode**. Click Next.
-    *   Choose a location for your database (choose the one closest to you). Click **Enable**.
+## Firebase setup
 
-5.  **Update Firestore Security Rules**:
-    *   Go to **Build > Firestore Database > Rules** tab.
-    *   Delete everything in the editor and replace it with this to allow read/write access during development:
-        ```
-        rules_version = '2';
-        service cloud.firestore {
-          match /databases/{database}/documents {
-            // This rule allows anyone to read or write to the database.
-            // It is for DEVELOPMENT ONLY. Do not use in a real product.
-            match /{document=**} {
-              allow read, write: if true;
-            }
-          }
-        }
-        ```
-    *   Click **Publish**.
+1. Create a Firebase project.
+2. Add a Web app in Firebase.
+3. Copy the Firebase web config values into your `.env`.
+4. Enable:
+   - Authentication
+   - Firestore Database
+   - Storage
+5. Add `localhost` to Firebase Authentication authorized domains for local sign-in.
+6. Make sure your Firestore and Storage rules allow your intended development access.
 
-6.  **Authorize Your Domain for Sign-In (Fix for "unauthorized-domain" error)**:
-    *   For Google Sign-In to work, you must tell Firebase to trust your local development domain.
-    *   In the Firebase Console, go to **Build > Authentication**.
-    *   Click on the **Settings** tab.
-    *   Select the **Authorized domains** sub-tab.
-    *   Click **"Add domain"**.
-    *   Enter `localhost` and click **Add**.
-    > This step is essential. If you skip it, you will get an **`auth/unauthorized-domain`** error when you try to sign in.
+## Google Calendar setup
 
-### Step 3: Configure Google Gemini API (For the AI Tutor)
+1. Use the same Google Cloud project or another project with Calendar API enabled.
+2. Enable `Google Calendar API`.
+3. Create an OAuth client for a Web application.
+4. Add your local origin, usually:
 
-The AI Tutor on the "Q & A" page uses the Gemini API.
+```text
+http://localhost:5173
+```
 
-1.  **Get an API Key**: Go to [Google AI Studio](https://aistudio.google.com/app/apikey) and click **"Create API key"**. Copy the key.
-2.  **Set the API Key**: This application platform automatically injects the necessary API key as an environment variable (`process.env.API_KEY`) when you run it. You do not need to create any `.env` files or modify the code for this step to work in this specific development environment.
+5. Copy the API key and OAuth client ID into:
+   - `VITE_GOOGLE_API_KEY`
+   - `VITE_GOOGLE_CLIENT_ID`
 
-### Step 4: Configure Google Calendar API (Optional)
+If Calendar connect fails, the most common issue is a missing or incorrect Authorized JavaScript origin.
 
-This step enables syncing tasks from the app to your personal Google Calendar.
+## AI setup
 
-1.  **Go to Google Cloud Console**: Open the [Google Cloud Console](https://console.cloud.google.com/). Make sure the project selected at the top is the same one you are using for Firebase.
-2.  **Enable the API**:
-    *   Go to **APIs & Services > Library**.
-    *   Search for **"Google Calendar API"** and click on it.
-    *   Click the **Enable** button.
-3.  **Configure OAuth Consent Screen (Required for Login)**:
-    *   In the Google Cloud Console, go to **APIs & Services > OAuth consent screen**.
-    *   Choose **External** for the User Type and click **Create**.
-    *   Fill in the required fields: App name, User support email, and Developer contact information.
-    *   Click **SAVE AND CONTINUE**. On the "Scopes" page, click **SAVE AND CONTINUE** again.
-    *   On the "Test users" page, click **+ ADD USERS** and add the Google account(s) you will use to test the login.
-    *   Click **SAVE AND CONTINUE** and then **BACK TO DASHBOARD**.
-4.  **Create Credentials**:
-    *   Go to **APIs & Services > Credentials**.
-    *   **API Key**: Click **+ CREATE CREDENTIALS** and select **API Key**. Copy the key that is generated.
-    *   **OAuth Client ID**: Click **+ CREATE CREDENTIALS** again and select **OAuth client ID**.
-        *   Application type: **Web application**.
-        *   Under **Authorized JavaScript origins**, click **+ ADD URI**. Enter `http://localhost:5173` (or whatever port your app runs on, with no trailing slash).
-        *   Click **Create**. Copy the **Client ID**.
-5.  **Add Keys to the Code**:
-    *   Open the file `src/services/calendarClient.ts`.
-    *   Replace `"YOUR_GOOGLE_API_KEY_HERE"` with the **API Key** you created.
-    *   Replace `"YOUR_GOOGLE_CLIENT_ID_HERE"` with the **Client ID** you created.
+The app uses Groq for:
+- RAG answers
+- study planning
+- quiz generation
+- summarization fallback paths
 
-### Step 5: Run the Application!
+Set `VITE_GROQ_API_KEY` in `.env` to enable live AI responses.
 
-You're all set! Now, let's start the app.
+## Project scripts
 
-1.  **Go back to your terminal**, which should still be in the project's root folder.
-2.  Run the following command:
-    ```bash
-    npm run dev
-    ```
-3.  The terminal will show you a local URL, usually `http://localhost:5173`. Open this URL in your browser.
-4.  **Important:** After changing your Firebase or Google Calendar keys, you must stop the server (press `Ctrl + C` in the terminal) and run `npm run dev` again.
-5.  The first time you load the app, you will see a "Setting up..." screen. This is the app populating your new Firebase database with dummy data. After a few seconds, the main application interface will appear.
+```bash
+npm run dev
+npm run build
+npm run preview
+npm run seed:courses
+```
 
-**Congratulations! ShikshakX is now running locally on your machine.**
+## Notes
 
----
+- New users start with an empty task list.
+- Planner history is saved in Firestore.
+- Materials now support text uploads plus document uploads like PDF and DOCX.
+- Text-style uploads are indexed for AI. Document uploads are stored in the library for download/open, but text extraction for PDF/DOCX is not implemented yet.
 
-## 🔍 Troubleshooting Common Issues
+## Troubleshooting
 
-- **Error: "Missing or insufficient permissions"**:
-  - This is **almost always a Firebase Rules issue**. Go back to **Step 2, Part 5** and make sure you have copied, pasted, and published the correct rules for Firestore.
+### Google sign-in fails with `unauthorized-domain`
+Add `localhost` to Firebase Authentication authorized domains.
 
-- **Error: "auth/unauthorized-domain"**:
-  - You missed **Step 2, Part 6**. Go back and add `localhost` to your **Authorized domains** in the Firebase Authentication settings.
+### Google Calendar connect fails
+Check the OAuth client origin in Google Cloud and make sure it exactly matches the URL you opened in the browser.
 
-- **My data (tasks, notes) disappears when I refresh the page**:
-  - This is also a **Firebase Rules** issue. The app can't save data permanently without the correct permissions. Double-check your rules and your `firebaseConfig` in `src/services/firebase.ts`.
+### Firestore permission errors
+Review your Firestore rules and confirm the app is using the correct Firebase project from `.env`.
 
-- **The "Connect Google Calendar" button doesn't work or shows an error**:
-  - **Re-read Step 4 very carefully**. The most common errors are:
-    1.  **Forgetting the OAuth Consent Screen**: You must configure it and add your email as a test user.
-    2.  **Incorrect "Authorized JavaScript origins"**: Make sure the URL (`http://localhost:5173`) in your Google Cloud Client ID settings exactly matches the URL in your browser, with no extra slashes.
-    3.  **Typo in Keys**: Double-check that you have correctly pasted your API Key and Client ID in `src/services/calendarClient.ts`.
-
-- **AI Tutor says "not configured"**:
-  - This means the Gemini API key is not being provided by the environment. On this platform, this should be handled automatically. If you are running this project elsewhere, you will need to set up an environment variable named `API_KEY`.
+### Storage upload errors
+Make sure Firebase Storage is enabled and `VITE_FIREBASE_STORAGE_BUCKET` is correct.

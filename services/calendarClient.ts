@@ -1,366 +1,340 @@
-// Google API configuration loaded from environment variables
+import { toast } from '../components/Toast';
+
 export const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY;
 export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-// Validate required environment variables
-if (!GOOGLE_API_KEY || !GOOGLE_CLIENT_ID) {
+const DISCOVERY_DOCS = ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'];
+const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
+const TOKEN_STORAGE_KEY = 'gcal_token';
+const globalWindow = window as any;
+
+const hasConfiguredValue = (value?: string) => Boolean(value && !/^your_|^replace_|placeholder/i.test(value));
+export const isGoogleCalendarConfigured = hasConfiguredValue(GOOGLE_API_KEY) && hasConfiguredValue(GOOGLE_CLIENT_ID);
+
+if (!isGoogleCalendarConfigured) {
   console.error('Missing required Google API configuration. Please check your .env file.');
   console.log('VITE_GOOGLE_API_KEY:', GOOGLE_API_KEY ? '*** (set)' : 'MISSING');
   console.log('VITE_GOOGLE_CLIENT_ID:', GOOGLE_CLIENT_ID ? '*** (set)' : 'MISSING');
 }
 
-// Check for placeholder values in production
-if (import.meta.env.PROD && (GOOGLE_API_KEY?.startsWith('AIza') || GOOGLE_CLIENT_ID?.startsWith('6'))) {
+if (import.meta.env.PROD && isGoogleCalendarConfigured) {
   console.warn('Warning: Using default Google API credentials in production is not recommended.');
 }
 
-const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
-
-import { toast } from '../components/Toast';
-
 let gapi: any = null;
-let gis: any = null;
 let tokenClient: any = null;
+let initPromise: Promise<void> | null = null;
+let pendingAuthResolver: ((authorized: boolean) => void) | null = null;
+let clientsReady = false;
 
-// Flags to prevent race conditions during script loading
-let gapiReady = false;
-let gisReady = false;
+const isScriptAlreadyAvailable = (src: string) => {
+  if (src.includes('apis.google.com/js/api.js')) {
+    return Boolean(globalWindow.gapi);
+  }
 
-export const initGoogleCalendar = (callback: (authorized: boolean) => void) => {
-    // Prevent re-initialization if scripts are already loaded or loading.
-    if (gapi || gis) {
-        checkToken(callback);
+  if (src.includes('accounts.google.com/gsi/client')) {
+    return Boolean(globalWindow.google?.accounts?.oauth2);
+  }
+
+  return false;
+};
+
+const loadScript = (src: string) =>
+  new Promise<void>((resolve, reject) => {
+    const existingScript = document.querySelector(`script[src="${src}"]`) as HTMLScriptElement | null;
+    const handleLoad = () => resolve();
+    const handleError = () => reject(new Error(`Failed to load ${src}`));
+
+    if (existingScript) {
+      if (existingScript.dataset.loaded === 'true' || isScriptAlreadyAvailable(src)) {
+        existingScript.dataset.loaded = 'true';
+        resolve();
         return;
-    }
-    
-    // Check for placeholder keys upfront. If they exist, do not attempt to load scripts.
-    if (GOOGLE_API_KEY.startsWith("YOUR_") || GOOGLE_CLIENT_ID.startsWith("YOUR_")) {
-        console.warn("Google Calendar API keys are not configured in 'services/calendarClient.ts'. The feature will be disabled.");
-        return;
+      }
+
+      existingScript.addEventListener('load', handleLoad, { once: true });
+      existingScript.addEventListener('error', handleError, { once: true });
+      return;
     }
 
-    const scriptGapi = document.createElement('script');
-    scriptGapi.src = 'https://apis.google.com/js/api.js';
-    scriptGapi.async = true;
-    scriptGapi.defer = true;
-    scriptGapi.onload = () => {
-        gapi = (window as any).gapi;
-        gapi.load('client', async () => {
-            try {
-                await gapi.client.init({
-                    apiKey: GOOGLE_API_KEY,
-                    discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"],
-                });
-                console.log('gapi client initialized');
-                gapiReady = true;
-                if (gisReady) checkToken(callback);
-            } catch (error) {
-                console.error("Error initializing Google API client:", error);
-                toast.error("Could not connect to Google Services. Check API Key.");
-            }
-        });
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      script.dataset.loaded = 'true';
+      resolve();
     };
-    document.body.appendChild(scriptGapi);
+    script.onerror = handleError;
+    document.body.appendChild(script);
+  });
 
-    const scriptGis = document.createElement('script');
-    scriptGis.src = 'https://accounts.google.com/gsi/client';
-    scriptGis.async = true;
-    scriptGis.defer = true;
-    scriptGis.onload = () => {
-        gis = (window as any).google.accounts.id;
-        try {
-            tokenClient = (window as any).google.accounts.oauth2.initTokenClient({
-                client_id: GOOGLE_CLIENT_ID,
-                scope: SCOPES,
-                callback: (tokenResponse: any) => {
-                    if (tokenResponse.error) {
-                        console.error('Google Auth Flow error:', tokenResponse);
-                        let message = `Google Auth Error: ${tokenResponse.error_description || tokenResponse.error}`;
-                        let isInfo = false;
+const getStoredToken = () => {
+  const rawToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+  if (!rawToken) {
+    return null;
+  }
 
-                        switch (tokenResponse.error) {
-                            case 'invalid_client':
-                                message = 'Google Auth Error: Invalid Client ID. Please check your configuration in `services/calendarClient.ts` and the Google Cloud Console.';
-                                break;
-                            case 'redirect_uri_mismatch':
-                            case 'origin_mismatch':
-                                message = 'Google Auth Error: Mismatched URL. Ensure your app\'s URL is listed under "Authorized JavaScript origins" in your Google Cloud OAuth settings.';
-                                break;
-                            case 'access_denied':
-                            case 'popup_closed_by_user':
-                                message = 'Google Sign-In was cancelled or access was denied.';
-                                isInfo = true;
-                                break;
-                        }
-                        
-                        if (isInfo) {
-                            toast.info(message);
-                        } else {
-                            toast.error(message);
-                        }
-                        
-                        callback(false);
-                        return;
-                    }
+  try {
+    return JSON.parse(rawToken);
+  } catch (error) {
+    console.error('Unable to parse stored Google Calendar token:', error);
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    return null;
+  }
+};
 
-                    if (tokenResponse && tokenResponse.access_token) {
-                        gapi.client.setToken(tokenResponse);
-                        localStorage.setItem('gcal_token', JSON.stringify(tokenResponse));
-                        callback(true);
-                    } else {
-                        callback(false);
-                    }
-                },
-                error_callback: (error: any) => {
-                    console.error("Google Auth Initialization Error:", error);
-                    toast.error("Google Authentication failed to initialize. See console for details.");
-                    callback(false);
-                }
+const clearStoredToken = () => {
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  gapi?.client?.setToken(null);
+};
+
+const isTokenExpired = (token: any) => !token?.access_token || !token?.expires_at || Date.now() >= token.expires_at;
+
+const setActiveToken = (token: any) => {
+  if (!token?.access_token) {
+    clearStoredToken();
+    return false;
+  }
+
+  const tokenData = {
+    ...token,
+    expires_at: token.expires_at ?? Date.now() + ((token.expires_in || 3600) * 1000) - 60000,
+  };
+
+  gapi?.client?.setToken(tokenData);
+  localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(tokenData));
+  return true;
+};
+
+const handleTokenResponse = (tokenResponse: any) => {
+  if (tokenResponse?.error) {
+    console.error('Google Auth Flow error:', tokenResponse);
+    let message = `Google Auth Error: ${tokenResponse.error_description || tokenResponse.error}`;
+    let isInfo = false;
+
+    switch (tokenResponse.error) {
+      case 'invalid_client':
+        message = 'Google Auth Error: Invalid Client ID. Please check your Google Cloud OAuth credentials in `.env`.';
+        break;
+      case 'redirect_uri_mismatch':
+      case 'origin_mismatch':
+        message = 'Google Auth Error: This app URL is not listed under Authorized JavaScript origins in Google Cloud.';
+        break;
+      case 'access_denied':
+      case 'popup_closed_by_user':
+        message = 'Google sign-in was cancelled or access was denied.';
+        isInfo = true;
+        break;
+    }
+
+    clearStoredToken();
+    if (isInfo) {
+      toast.info(message);
+    } else {
+      toast.error(message);
+    }
+    pendingAuthResolver?.(false);
+    pendingAuthResolver = null;
+    return;
+  }
+
+  const authorized = setActiveToken(tokenResponse);
+  pendingAuthResolver?.(authorized);
+  pendingAuthResolver = null;
+};
+
+const initializeGoogleClients = async () => {
+  if (!isGoogleCalendarConfigured) {
+    throw new Error('Google Calendar credentials are missing.');
+  }
+
+  if (initPromise) {
+    return initPromise;
+  }
+
+  initPromise = (async () => {
+    await Promise.all([
+      loadScript('https://apis.google.com/js/api.js'),
+      loadScript('https://accounts.google.com/gsi/client'),
+    ]);
+
+    gapi = globalWindow.gapi;
+    if (!gapi || !globalWindow.google?.accounts?.oauth2) {
+      throw new Error('Google APIs failed to load.');
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      gapi.load('client', {
+        callback: async () => {
+          try {
+            await gapi.client.init({
+              apiKey: GOOGLE_API_KEY,
+              discoveryDocs: DISCOVERY_DOCS,
             });
-            console.log('gis client initialized');
-            gisReady = true;
-            if (gapiReady) checkToken(callback);
-        } catch (error) {
-            console.error("Error initializing Google Sign-In client:", error);
-            toast.error("Could not set up Google Sign-In. Check Client ID.");
-        }
-    };
-    document.body.appendChild(scriptGis);
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        },
+        onerror: () => reject(new Error('Failed to load the Google API client.')),
+      });
+    });
+
+    tokenClient = globalWindow.google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: SCOPES,
+      callback: handleTokenResponse,
+      error_callback: (error: any) => {
+        console.error('Google Auth Initialization Error:', error);
+        toast.error('Google Authentication failed to initialize. See console for details.');
+        pendingAuthResolver?.(false);
+        pendingAuthResolver = null;
+      },
+    });
+
+    const storedToken = getStoredToken();
+    if (storedToken && !isTokenExpired(storedToken)) {
+      setActiveToken(storedToken);
+    } else if (storedToken) {
+      clearStoredToken();
+    }
+
+    clientsReady = true;
+  })().catch((error) => {
+    clientsReady = false;
+    initPromise = null;
+    throw error;
+  });
+
+  return initPromise;
 };
 
 const checkToken = (callback: (authorized: boolean) => void) => {
-    if (!gapi || !gis) return; // Wait for both to be ready
-    const storedToken = localStorage.getItem('gcal_token');
-    if (storedToken) {
-        const token = JSON.parse(storedToken);
-        // A robust solution would check expiry time. This is a simplified check.
-        if (token.access_token) {
-            gapi.client.setToken(token);
-            callback(true);
-            return;
-        }
-    }
+  const token = gapi?.client?.getToken?.() || getStoredToken();
+  if (token && !isTokenExpired(token)) {
+    callback(setActiveToken(token));
+    return;
+  }
+
+  clearStoredToken();
+  callback(false);
+};
+
+export const ensureGoogleCalendarReady = async () => {
+  try {
+    await initializeGoogleClients();
+    return true;
+  } catch (error) {
+    console.error('Error initializing Google Calendar:', error);
+    toast.error('Could not initialize Google Calendar. Check the Google Cloud credentials in your `.env` file.');
+    return false;
+  }
+};
+
+export const hasGoogleCalendarLoaded = () => clientsReady && Boolean(tokenClient && gapi?.client);
+
+export const initGoogleCalendar = async (callback: (authorized: boolean) => void) => {
+  if (!isGoogleCalendarConfigured) {
     callback(false);
-}
+    return false;
+  }
 
-export const handleAuthClick = () => {
-    if (GOOGLE_API_KEY.startsWith("YOUR_") || GOOGLE_CLIENT_ID.startsWith("YOUR_")) {
-        toast.error('Google Calendar is not configured. Please add your keys to services/calendarClient.ts');
-        return;
-    }
+  try {
+    await initializeGoogleClients();
+    checkToken(callback);
+    return true;
+  } catch (error) {
+    console.error('Google Calendar init failed:', error);
+    callback(false);
+    return false;
+  }
+};
 
-    if (tokenClient) {
-        // This will trigger the GIS pop-up for the user to sign in.
-        tokenClient.requestAccessToken({ prompt: '' });
-    } else {
-        console.error('Google Auth client not initialized. Have you configured your API keys?');
-        toast.error('Google Calendar is not configured or failed to initialize.');
-    }
+export const handleAuthClick = async () => {
+  if (!isGoogleCalendarConfigured) {
+    toast.error('Google Calendar is not configured. Please use the Google Cloud credentials in your `.env` file.');
+    return false;
+  }
+
+  if (!hasGoogleCalendarLoaded()) {
+    toast.info('Google Calendar is still preparing. Please wait a moment and click again.');
+    return false;
+  }
+
+  const token = gapi?.client?.getToken?.() || getStoredToken();
+  if (token && !isTokenExpired(token)) {
+    return setActiveToken(token);
+  }
+
+  clearStoredToken();
+  return new Promise<boolean>((resolve) => {
+    pendingAuthResolver = resolve;
+    tokenClient.requestAccessToken({ prompt: token?.access_token ? '' : 'consent' });
+  });
 };
 
 export const handleSignoutClick = (callback: () => void) => {
-    const token = gapi?.client.getToken();
-    if (token !== null) {
-        (window as any).google.accounts.oauth2.revoke(token.access_token, () => {
-            gapi.client.setToken('');
-            localStorage.removeItem('gcal_token');
-            callback();
-        });
-    }
+  const token = gapi?.client?.getToken?.() || getStoredToken();
+  if (token?.access_token && globalWindow.google?.accounts?.oauth2) {
+    globalWindow.google.accounts.oauth2.revoke(token.access_token, () => {
+      clearStoredToken();
+      callback();
+    });
+    return;
+  }
+
+  clearStoredToken();
+  callback();
 };
 
-// Check if token is expired
-const isTokenExpired = (token: any): boolean => {
-    if (!token || !token.expires_at) return true;
-    return Date.now() > token.expires_at;
-};
+const ensureToken = async () => {
+  const token = gapi?.client?.getToken?.() || getStoredToken();
+  if (token && !isTokenExpired(token)) {
+    return setActiveToken(token);
+  }
 
-// Refresh the access token using the refresh token
-const refreshToken = async (): Promise<boolean> => {
-    try {
-        const token = gapi.client.getToken();
-        if (!token?.refresh_token) return false;
-
-        const response = await fetch('https://oauth2.googleapis.com/token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-                client_id: GOOGLE_CLIENT_ID,
-                refresh_token: token.refresh_token,
-                grant_type: 'refresh_token'
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to refresh token');
-        }
-
-        const newToken = await response.json();
-        const tokenData = {
-            ...token,
-            access_token: newToken.access_token,
-            expires_in: newToken.expires_in,
-            expires_at: Date.now() + (newToken.expires_in * 1000) - 60000, // 1 min buffer
-            scope: newToken.scope || token.scope
-        };
-
-        gapi.client.setToken(tokenData);
-        localStorage.setItem('gcal_token', JSON.stringify(tokenData));
-        return true;
-    } catch (error) {
-        console.error('Error refreshing token:', error);
-        return false;
-    }
-};
-
-// Helper function to ensure we have a valid token
-const ensureToken = async (): Promise<boolean> => {
-    try {
-        // Try to get existing token
-        let token = gapi?.client.getToken();
-        
-        // Check if we have a valid token that's not expired
-        if (token && !isTokenExpired(token)) {
-            return true;
-        }
-        
-        // Try to refresh the token if it's expired but has a refresh token
-        if (token?.refresh_token) {
-            const refreshed = await refreshToken();
-            if (refreshed) return true;
-        }
-        
-        // If we get here, we need to get a new token
-        return new Promise((resolve) => {
-            if (!tokenClient) {
-                console.error('Google token client not initialized');
-                resolve(false);
-                return;
-            }
-            
-            // Request a new token with offline access to get a refresh token
-            tokenClient.requestAccessToken({ prompt: 'consent' });
-            
-            // Set up a one-time listener for the token callback
-            const originalCallback = tokenClient.callback;
-            tokenClient.callback = (response: any) => {
-                // Restore the original callback
-                tokenClient.callback = originalCallback;
-                
-                if (response && !response.error) {
-                    // Add expiration time (with 1 minute buffer)
-                    const tokenData = {
-                        ...response,
-                        expires_at: Date.now() + ((response.expires_in || 3600) * 1000) - 60000
-                    };
-                    
-                    gapi.client.setToken(tokenData);
-                    localStorage.setItem('gcal_token', JSON.stringify(tokenData));
-                    resolve(true);
-                } else {
-                    console.error('Failed to get access token:', response?.error);
-                    // Clear any invalid token
-                    gapi?.client.setToken(null);
-                    localStorage.removeItem('gcal_token');
-                    resolve(false);
-                }
-            };
-        });
-    } catch (error) {
-        console.error('Error ensuring token:', error);
-        return false;
-    }
-};
-
-// Retry wrapper for API calls
-const withRetry = async <T>(
-    fn: () => Promise<T>,
-    maxRetries = 2,
-    delayMs = 1000
-): Promise<T> => {
-    let lastError: any;
-    
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-        try {
-            return await fn();
-        } catch (error: any) {
-            lastError = error;
-            
-            // If it's an auth error and we have retries left, try to refresh the token
-            if (error.status === 401 && attempt < maxRetries - 1) {
-                console.log('Auth error, attempting to refresh token...');
-                await new Promise(resolve => setTimeout(resolve, delayMs * (attempt + 1)));
-                
-                // Clear the invalid token
-                gapi?.client.setToken(null);
-                localStorage.removeItem('gcal_token');
-                
-                // Get a new token
-                const refreshed = await ensureToken();
-                if (!refreshed) {
-                    throw new Error('Your Google Calendar session has expired. Please sign in again.');
-                }
-                continue;
-            }
-            
-            // For other errors or if we're out of retries
-            throw error;
-        }
-    }
-    
-    throw lastError;
+  clearStoredToken();
+  return handleAuthClick();
 };
 
 export const createCalendarEvent = async (task: { title: string; description: string; dueDate: Date }) => {
-    try {
-        // Ensure we have a valid token with retry logic
-        return await withRetry(async () => {
-            const isAuthenticated = await ensureToken();
-            if (!isAuthenticated) {
-                throw new Error('Please connect to Google Calendar first.');
-            }
-
-        const event = {
-            'summary': task.title,
-            'description': task.description,
-            'start': {
-                'dateTime': task.dueDate.toISOString(),
-                'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone,
-            },
-            'end': {
-                'dateTime': new Date(task.dueDate.getTime() + 60 * 60 * 1000).toISOString(),
-                'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone,
-            },
-        };
-
-        // Make sure gapi client is properly initialized
-        if (!gapi?.client?.calendar) {
-            await gapi.client.init({
-                apiKey: GOOGLE_API_KEY,
-                discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"],
-            });
-        }
-
-            const response = await gapi.client.calendar.events.insert({
-                'calendarId': 'primary',
-                'resource': event,
-            });
-
-            console.log('Event created successfully:', response.result);
-            return response.result;
-        });
-    } catch (error: any) {
-        console.error('Error creating calendar event:', {
-            error: error.toString(),
-            details: error.details || error.result?.error || error,
-            stack: error.stack
-        });
-        
-        // Re-throw with a user-friendly message
-        if (error.message.includes('expired') || error.status === 401) {
-            throw new Error('Your Google Calendar session has expired. Please sign in again.');
-        }
-        
-        throw new Error(`Failed to create Google Calendar event: ${error.message || 'Please try again later.'}`);
+  try {
+    const isReady = await ensureGoogleCalendarReady();
+    if (!isReady) {
+      throw new Error('Google Calendar could not be initialized.');
     }
+
+    const isAuthenticated = await ensureToken();
+    if (!isAuthenticated) {
+      throw new Error('Please connect to Google Calendar first.');
+    }
+
+    const event = {
+      summary: task.title,
+      description: task.description,
+      start: {
+        dateTime: task.dueDate.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      },
+      end: {
+        dateTime: new Date(task.dueDate.getTime() + 60 * 60 * 1000).toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      },
+    };
+
+    const response = await gapi.client.calendar.events.insert({
+      calendarId: 'primary',
+      resource: event,
+    });
+
+    return response.result;
+  } catch (error: any) {
+    console.error('Error creating calendar event:', error);
+    if (error?.message?.includes('expired') || error?.status === 401) {
+      throw new Error('Your Google Calendar session has expired. Please sign in again.');
+    }
+
+    throw new Error(`Failed to create Google Calendar event: ${error.message || 'Please try again later.'}`);
+  }
 };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, limit, orderBy, where, Timestamp, doc } from 'firebase/firestore';
+import { collection, getDocs, query, limit, orderBy, doc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import type { Course, Task, Note } from '../types';
 import type { User } from 'firebase/auth';
@@ -9,22 +9,27 @@ import {
   ArrowRightIcon, 
   BookOpenIcon, 
   ClipboardDocumentListIcon, 
-  PencilIcon 
+  PencilIcon,
+  SparklesIcon,
+  ChatBubbleBottomCenterTextIcon
 } from '@heroicons/react/24/solid';
-import { useAuth } from '../hooks/useAuth';
+import { formatDate, formatDateTime, toDate } from '../utils/date';
 
 interface DashboardProps {
     user: User;
 }
 
-const StatCard: React.FC<{ title: string; value: number; icon: React.ElementType }> = ({ title, value, icon: Icon }) => (
-    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-lg flex items-center space-x-4">
-        <div className="bg-blue-100 dark:bg-blue-900/50 p-3 rounded-full">
-            <Icon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+const StatCard: React.FC<{ title: string; value: number; caption: string; icon: React.ElementType }> = ({ title, value, caption, icon: Icon }) => (
+    <div className="app-panel rounded-[1.6rem] p-5">
+        <div className="mb-5 flex items-center justify-between">
+            <div className="inline-flex rounded-2xl bg-blue-50 p-3 text-blue-700">
+                <Icon className="h-6 w-6" />
+            </div>
+            <span className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{title}</span>
         </div>
         <div>
-            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">{title}</p>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
+            <p className="text-3xl font-extrabold tracking-tight text-slate-950">{value}</p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{caption}</p>
         </div>
     </div>
 );
@@ -37,82 +42,62 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
     useEffect(() => {
         const fetchData = async () => {
-            if (!user || !user.uid) {
-                console.error('No user authenticated');
-                setLoading(false);
-                return;
-            }
-
             try {
                 setLoading(true);
                 const userDocRef = doc(db, 'users', user.uid);
+                const [coursesResult, tasksResult, notesResult] = await Promise.allSettled([
+                    getDocs(query(collection(userDocRef, 'courses'), limit(6))),
+                    getDocs(collection(userDocRef, 'tasks')),
+                    getDocs(query(collection(userDocRef, 'notes'), orderBy('createdAt', 'desc'), limit(2))),
+                ]);
 
-                // Fetch Courses
-                try {
-                    const coursesQuery = query(collection(userDocRef, 'courses'), limit(6));
-                    const coursesSnapshot = await getDocs(coursesQuery);
-                    console.log('Fetched courses:', coursesSnapshot.docs.length);
-                    setCourses(coursesSnapshot.docs.map(d => ({
-                        id: d.id,
-                        title: d.data().title || 'Untitled Course',
-                        description: d.data().description || 'No description',
-                        instructor: d.data().instructor || 'Instructor',
-                        coverImage: d.data().coverImage || 'https://via.placeholder.com/300x200',
-                        url: d.data().url || '#',
-                        ...d.data()
+                if (coursesResult.status === 'fulfilled') {
+                    setCourses(coursesResult.value.docs.map(snapshot => ({
+                        id: snapshot.id,
+                        title: snapshot.data().title || 'Untitled Course',
+                        description: snapshot.data().description || 'No description available yet.',
+                        instructor: snapshot.data().instructor || 'Instructor',
+                        coverImage: snapshot.data().coverImage || 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=1200&q=80',
+                        url: snapshot.data().url || '#',
+                        ...snapshot.data()
                     } as Course)));
-                } catch (error) {
-                    console.error('Error fetching courses:', error);
+                } else {
+                    console.error('Error fetching courses:', coursesResult.reason);
                     setCourses([]);
                 }
 
-                // Fetch Upcoming Tasks
-                try {
-                    const tasksQuery = query(
-                        collection(userDocRef, 'tasks'),
-                        where('completed', '==', false),
-                        orderBy('dueDate', 'asc'),
-                        limit(3)
-                    );
-                    const tasksSnapshot = await getDocs(tasksQuery);
-                    console.log('Fetched tasks:', tasksSnapshot.docs.length);
-                    setTasks(tasksSnapshot.docs.map(d => {
-                        const data = d.data();
+                if (tasksResult.status === 'fulfilled') {
+                    const taskData = tasksResult.value.docs.map(snapshot => {
+                        const data = snapshot.data();
                         return {
-                            id: d.id,
+                            id: snapshot.id,
                             title: data.title || 'Untitled Task',
                             description: data.description || '',
-                            dueDate: data.dueDate ? (data.dueDate as Timestamp).toDate() : new Date(),
-                            completed: data.completed || false,
-                            ...data
+                            dueDate: toDate(data.dueDate),
+                            completed: Boolean(data.completed),
+                            ...data,
                         } as Task;
-                    }));
-                } catch (error) {
-                    console.error('Error fetching tasks:', error);
+                    });
+                    taskData.sort((left, right) => left.dueDate.getTime() - right.dueDate.getTime());
+                    setTasks(taskData);
+                } else {
+                    console.error('Error fetching tasks:', tasksResult.reason);
                     setTasks([]);
                 }
 
-                // Fetch Recent Notes (with fallback to empty array if no notes)
-                try {
-                    const notesQuery = query(
-                        collection(userDocRef, 'notes'), 
-                        orderBy('createdAt', 'desc'), 
-                        limit(2)
-                    );
-                    const notesSnapshot = await getDocs(notesQuery);
-                    console.log('Fetched notes:', notesSnapshot.docs.length);
-                    setNotes(notesSnapshot.docs.map(d => {
-                        const data = d.data();
+                if (notesResult.status === 'fulfilled') {
+                    setNotes(notesResult.value.docs.map(snapshot => {
+                        const data = snapshot.data();
                         return {
-                            id: d.id,
+                            id: snapshot.id,
                             title: data.title || 'Untitled Note',
                             content: data.content || '',
-                            createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : new Date(),
-                            ...data
+                            createdAt: toDate(data.createdAt),
+                            ...data,
                         } as Note;
                     }));
-                } catch (error) {
-                    console.error('Error fetching notes:', error);
+                } else {
+                    console.error('Error fetching notes:', notesResult.reason);
                     setNotes([]);
                 }
             } catch (error) {
@@ -125,136 +110,216 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         fetchData();
     }, [user?.uid]);
 
+    const firstName = user.displayName?.split(' ')[0] || 'Student';
+    const now = Date.now();
+    const upcomingTasks = tasks.filter((task) => !task.completed);
+    const missedTasks = upcomingTasks.filter((task) => task.dueDate.getTime() < now);
+    const nextTask = upcomingTasks.find((task) => task.dueDate.getTime() >= now) || upcomingTasks[0];
+
     return (
         <div className="animate-fade-in space-y-8">
-            <div>
-                <h1 className="text-4xl font-extrabold text-slate-900 dark:text-white">Welcome back, {user.displayName?.split(' ')[0] || 'Student'}!</h1>
-                <p className="text-slate-600 dark:text-slate-400 mt-1">Let's continue your learning journey.</p>
+            <section className="app-panel-strong hero-gradient overflow-hidden p-8 md:p-10">
+                <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
+                    <div className="max-w-3xl">
+                        <div className="page-eyebrow mb-5">
+                            <SparklesIcon className="h-4 w-4" />
+                            Personal dashboard
+                        </div>
+                        <h1 className="page-title text-slate-950">Welcome back, {firstName}.</h1>
+                        <p className="page-copy mt-4 max-w-2xl text-lg">
+                            Your coursework, notes, plans, and AI tools are ready. The goal today is simple:
+                            keep momentum without friction.
+                        </p>
+                        <div className="mt-6 flex flex-wrap gap-3">
+                            <div className="metric-chip">
+                                <span className="status-dot"></span>
+                                {formatDate(new Date(), { weekday: 'long', month: 'long', day: 'numeric' })}
+                            </div>
+                            <div className="metric-chip">
+                                {courses.length} active course{courses.length === 1 ? '' : 's'}
+                            </div>
+                            <div className="metric-chip">
+                                {upcomingTasks.length} open task{upcomingTasks.length === 1 ? '' : 's'}
+                            </div>
+                            <div className="metric-chip">
+                                {missedTasks.length} missed task{missedTasks.length === 1 ? '' : 's'}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="app-panel w-full max-w-md rounded-[1.6rem] p-5">
+                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Today&apos;s focus</p>
+                        <h2 className="mt-3 text-2xl font-extrabold tracking-tight text-slate-950">
+                            {nextTask ? nextTask.title : 'You are all caught up'}
+                        </h2>
+                        <p className="mt-3 text-sm leading-6 text-slate-600">
+                            {nextTask
+                                ? `${nextTask.description || 'The next task in your queue is ready.'} Due ${formatDate(nextTask.dueDate)}.`
+                                : 'No urgent deadlines are waiting on you right now. This is a good time to review materials or create your next study block.'}
+                        </p>
+                        <div className="mt-5 flex gap-3">
+                            <Link to="/tasks" className="app-button-primary px-5 py-3 text-sm">
+                                Open Tasks
+                                <ArrowRightIcon className="h-4 w-4" />
+                            </Link>
+                            <Link to="/qa" className="app-button-secondary px-5 py-3 text-sm">
+                                Ask AI
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+                <StatCard
+                    title="Courses"
+                    value={courses.length}
+                    caption="Programs, subjects, and learning paths you can continue right away."
+                    icon={BookOpenIcon}
+                />
+                <StatCard
+                    title="Open Tasks"
+                    value={upcomingTasks.length}
+                    caption="Actions and due dates that still need to be completed."
+                    icon={ClipboardDocumentListIcon}
+                />
+                <StatCard
+                    title="Missed Tasks"
+                    value={missedTasks.length}
+                    caption="Overdue work that needs attention before it snowballs."
+                    icon={ClipboardDocumentListIcon}
+                />
+                <StatCard
+                    title="Notes"
+                    value={notes.length}
+                    caption="Fresh thinking captured and ready to revisit when needed."
+                    icon={PencilIcon}
+                />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <StatCard title="Enrolled Courses" value={courses.length} icon={BookOpenIcon} />
-                <StatCard title="Upcoming Tasks" value={tasks.length} icon={ClipboardDocumentListIcon} />
-                <StatCard title="Notes Created" value={notes.length} icon={PencilIcon} />
-            </div>
-
-            <div className="space-y-8">
-                {/* Courses Section */}
-                <div>
-                    <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Continue Learning</h2>
-                        <Link to="/courses" className="flex items-center text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline">
-                            View All <ArrowRightIcon className="h-4 w-4 ml-1" />
+            <div className="grid gap-8 xl:grid-cols-[1.65fr_1fr]">
+                <section className="space-y-5">
+                    <div className="flex items-end justify-between gap-4">
+                        <div>
+                            <h2 className="section-title">Continue learning</h2>
+                            <p className="section-copy mt-2">Jump back into the most relevant courses without digging through clutter.</p>
+                        </div>
+                        <Link to="/courses" className="inline-flex items-center gap-1 text-sm font-bold text-blue-700">
+                            View all
+                            <ArrowRightIcon className="h-4 w-4" />
                         </Link>
                     </div>
+
                     {loading ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                            {[1, 2, 3].map((i) => (
-                                <div key={i} className="h-80 bg-slate-200 dark:bg-slate-800 rounded-2xl animate-pulse"></div>
+                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                            {[1, 2, 3].map((item) => (
+                                <div key={item} className="app-panel h-80 animate-pulse rounded-[1.75rem] bg-white/60"></div>
                             ))}
                         </div>
                     ) : courses.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
                             {courses.slice(0, 3).map(course => (
                                 <CourseCard key={course.id} course={course} />
                             ))}
                         </div>
                     ) : (
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-8 text-center">
-                            <BookOpenIcon className="h-12 w-12 mx-auto text-slate-300 dark:text-slate-600" />
-                            <p className="mt-4 text-slate-500">No courses found. Start by adding your first course!</p>
-                            <Link to="/courses" className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                                Add Course
-                            </Link>
+                        <div className="app-panel rounded-[1.75rem] p-8 text-center">
+                            <BookOpenIcon className="mx-auto h-12 w-12 text-slate-300" />
+                            <p className="mt-4 text-lg font-bold text-slate-900">No courses yet</p>
+                            <p className="mt-2 text-sm leading-6 text-slate-600">Starter content did not load, or your workspace is still empty. Add or seed courses to begin.</p>
                         </div>
                     )}
-                </div>
+                </section>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Tasks Section */}
-                    <div className="lg:col-span-2">
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Upcoming Tasks</h2>
-                            <Link to="/tasks" className="flex items-center text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline">
-                                View All <ArrowRightIcon className="h-4 w-4 ml-1" />
-                            </Link>
+                <div className="space-y-6">
+                    <section className="app-panel rounded-[1.75rem] p-6">
+                        <div className="mb-5 flex items-end justify-between gap-4">
+                            <div>
+                                <h2 className="section-title">Upcoming tasks</h2>
+                                <p className="section-copy mt-2">Stay ahead of your next deadlines.</p>
+                            </div>
+                            <Link to="/tasks" className="text-sm font-bold text-blue-700">Open</Link>
                         </div>
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6">
+                        <div className="space-y-3">
                             {loading ? (
-                                <div className="space-y-4">
-                                    {[1, 2, 3].map((i) => (
-                                        <div key={i} className="h-16 bg-slate-200 dark:bg-slate-700 rounded-lg animate-pulse"></div>
-                                    ))}
-                                </div>
-                            ) : tasks.length > 0 ? (
-                                <div className="space-y-4">
-                                    {tasks.map(task => (
-                                        <div key={task.id} className="flex items-center p-3 hover:bg-slate-50 dark:hover:bg-slate-750 rounded-lg transition-colors">
-                                            <div className="h-2.5 w-2.5 rounded-full bg-blue-500 mr-4 flex-shrink-0"></div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-semibold text-slate-800 dark:text-white truncate">{task.title}</p>
-                                                {task.description && (
-                                                    <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{task.description}</p>
-                                                )}
+                                [1, 2, 3].map((item) => <div key={item} className="h-20 animate-pulse rounded-2xl bg-slate-100"></div>)
+                            ) : upcomingTasks.length > 0 ? (
+                                upcomingTasks.slice(0, 3).map(task => {
+                                    const isMissed = task.dueDate.getTime() < now;
+                                    return (
+                                    <div key={task.id} className={`rounded-[1.35rem] border p-4 ${isMissed ? 'border-red-200 bg-red-50/90' : 'border-slate-200/80 bg-white/90'}`}>
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div className="min-w-0">
+                                                <p className="truncate text-sm font-bold text-slate-950">{task.title}</p>
+                                                <p className="mt-1 text-sm leading-6 text-slate-600">{task.description || 'No additional details yet.'}</p>
                                             </div>
-                                            <p className="text-sm font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap ml-4">
-                                                {task.dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                            </p>
+                                            <span className={`rounded-full px-3 py-1 text-xs font-bold ${isMissed ? 'bg-red-100 text-red-700' : 'bg-blue-50 text-blue-700'}`}>
+                                                {formatDate(task.dueDate, { month: 'short', day: 'numeric' })}
+                                            </span>
                                         </div>
-                                    ))}
-                                </div>
+                                        {isMissed && (
+                                            <p className="mt-3 text-xs font-bold uppercase tracking-[0.14em] text-red-700">Missed deadline</p>
+                                        )}
+                                    </div>
+                                )})
                             ) : (
-                                <div className="text-center py-8">
-                                    <ClipboardDocumentListIcon className="h-12 w-12 mx-auto text-slate-300 dark:text-slate-600" />
-                                    <p className="mt-2 text-slate-500">No upcoming tasks. Great job!</p>
-                                    <Link to="/tasks" className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                                        Create Task
-                                    </Link>
+                                <div className="rounded-[1.35rem] bg-slate-50 p-5 text-sm leading-6 text-slate-600">
+                                    Nothing urgent is scheduled. Create a task when you want to turn plans into action.
                                 </div>
                             )}
                         </div>
-                    </div>
+                    </section>
 
-                    {/* Notes Section */}
-                    <div>
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Recent Notes</h2>
-                            <Link to="/notes" className="flex items-center text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline">
-                                View All <ArrowRightIcon className="h-4 w-4 ml-1" />
-                            </Link>
+                    <section className="app-panel rounded-[1.75rem] p-6">
+                        <div className="mb-5 flex items-end justify-between gap-4">
+                            <div>
+                                <h2 className="section-title">Recent notes</h2>
+                                <p className="section-copy mt-2">Your latest thinking, captured and easy to revisit.</p>
+                            </div>
+                            <Link to="/notes" className="text-sm font-bold text-blue-700">Open</Link>
                         </div>
-                        <div className="space-y-4">
+                        <div className="space-y-3">
                             {loading ? (
-                                [1, 2].map((i) => (
-                                    <div key={i} className="h-24 bg-slate-200 dark:bg-slate-700 rounded-lg animate-pulse"></div>
-                                ))
+                                [1, 2].map((item) => <div key={item} className="h-28 animate-pulse rounded-2xl bg-slate-100"></div>)
                             ) : notes.length > 0 ? (
                                 notes.map(note => (
-                                    <Link 
-                                        to={`/notes/${note.id}`} 
-                                        key={note.id} 
-                                        className="block bg-yellow-50 dark:bg-yellow-900/30 hover:bg-yellow-100 dark:hover:bg-yellow-900/50 p-4 rounded-lg transition-colors border border-yellow-100 dark:border-yellow-900/50"
+                                    <Link
+                                        to="/notes"
+                                        key={note.id}
+                                        className="block rounded-[1.35rem] border border-amber-100 bg-amber-50/90 p-4 transition hover:border-amber-200 hover:bg-amber-50"
                                     >
-                                        <h4 className="font-bold text-yellow-900 dark:text-yellow-200 truncate">{note.title}</h4>
-                                        <p className="text-sm text-yellow-800/80 dark:text-yellow-300/80 line-clamp-2 mt-1">
-                                            {note.content}
-                                        </p>
-                                        <p className="text-xs text-yellow-700/60 dark:text-yellow-400/60 mt-2">
-                                            {new Date(note.createdAt).toLocaleDateString()}
+                                        <p className="text-sm font-bold text-slate-950">{note.title}</p>
+                                        <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">{note.content || 'No note body yet.'}</p>
+                                        <p className="mt-3 text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">
+                                            {formatDateTime(note.createdAt, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                                         </p>
                                     </Link>
                                 ))
                             ) : (
-                                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 text-center">
-                                    <PencilIcon className="h-10 w-10 mx-auto text-slate-300 dark:text-slate-600" />
-                                    <p className="mt-2 text-slate-500">No notes yet</p>
-                                    <Link to="/notes/new" className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-yellow-500 hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500">
-                                        Create Note
-                                    </Link>
+                                <div className="rounded-[1.35rem] bg-slate-50 p-5 text-sm leading-6 text-slate-600">
+                                    Capture quick thoughts, summaries, or lecture notes and they&apos;ll show up here.
                                 </div>
                             )}
                         </div>
-                    </div>
+                    </section>
+
+                    <section className="app-panel rounded-[1.75rem] p-6">
+                        <div className="flex items-start gap-4">
+                            <div className="brand-surface rounded-2xl p-3 text-white">
+                                <ChatBubbleBottomCenterTextIcon className="h-6 w-6" />
+                            </div>
+                            <div>
+                                <h2 className="section-title">Need a study nudge?</h2>
+                                <p className="section-copy mt-2">
+                                    Use Q&amp;A for grounded help from your own materials, or switch to the tutor for broader academic guidance.
+                                </p>
+                                <Link to="/qa" className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-blue-700">
+                                    Start a conversation
+                                    <ArrowRightIcon className="h-4 w-4" />
+                                </Link>
+                            </div>
+                        </div>
+                    </section>
                 </div>
             </div>
         </div>

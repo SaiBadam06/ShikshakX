@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { HomeIcon, BookOpenIcon, BeakerIcon, CheckCircleIcon, ClipboardDocumentListIcon, CalendarIcon, BoltIcon, BuildingLibraryIcon, PencilIcon, ArrowRightOnRectangleIcon, UserGroupIcon } from '@heroicons/react/24/outline';
+import { HomeIcon, BookOpenIcon, BeakerIcon, CheckCircleIcon, ClipboardDocumentListIcon, CalendarIcon, BoltIcon, BuildingLibraryIcon, PencilIcon, ArrowRightOnRectangleIcon, UserGroupIcon, SparklesIcon, XMarkIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
 import { signOut, User } from 'firebase/auth';
 import { auth } from '../services/firebase';
 import { toast } from './Toast';
+import ThemeToggle from './ThemeToggle';
+import { subscribeToUserProfile } from '../services/communityService';
+import type { AppUserProfile } from '../types';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
@@ -16,16 +19,27 @@ const navigation = [
   { name: 'Materials', href: '/materials', icon: BuildingLibraryIcon },
   { name: 'Notes', href: '/notes', icon: PencilIcon },
   { name: 'Community', href: '/community', icon: UserGroupIcon },
+  { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
 ];
 
 interface SidebarProps {
   user: User;
+  theme: 'day' | 'dark';
+  onToggleTheme: () => void;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ user }) => {
-  const linkClasses = "flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200";
-  const inactiveClasses = "text-slate-500 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700";
-  const activeClasses = "bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300 font-semibold";
+const Sidebar: React.FC<SidebarProps> = ({ user, theme, onToggleTheme, isOpen, onClose }) => {
+  const [profile, setProfile] = useState<AppUserProfile | null>(null);
+  const linkClasses = "group flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition-all duration-200";
+  const inactiveClasses = "text-slate-500 hover:bg-white/80 hover:text-slate-900";
+  const activeClasses = "bg-white text-slate-950 shadow-[0_18px_40px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/80";
+
+  useEffect(() => {
+    const unsubscribe = subscribeToUserProfile(user.uid, setProfile);
+    return () => unsubscribe();
+  }, [user.uid]);
 
   const handleSignOut = async () => {
     try {
@@ -39,34 +53,66 @@ const Sidebar: React.FC<SidebarProps> = ({ user }) => {
   };
 
   return (
-    <aside className="w-64 flex-shrink-0 bg-white dark:bg-slate-800 text-slate-800 dark:text-white flex flex-col border-r border-slate-200 dark:border-slate-700">
-      <div className="h-20 flex items-center justify-center px-4 border-b border-slate-200 dark:border-slate-700">
-        <h1 className="text-2xl font-bold tracking-wider text-slate-900 dark:text-white">ShikshakX</h1>
-      </div>
-      <nav className="flex-1 p-4 space-y-2">
+    <aside className={`fixed inset-y-0 left-0 z-40 w-[290px] transform transition-transform duration-300 md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <div className="m-3 flex h-[calc(100vh-1.5rem)] flex-col rounded-[2rem] border border-white/70 bg-white/80 p-4 shadow-[0_30px_80px_rgba(15,23,42,0.12)] backdrop-blur-2xl">
+        <div className="mb-6 rounded-[1.6rem] brand-surface px-4 py-4 text-white">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="mb-2 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white/12">
+                <SparklesIcon className="h-6 w-6" />
+              </div>
+              <h1 className="text-xl font-extrabold tracking-tight">ShikshakX</h1>
+              <p className="mt-1 text-sm text-white/80">A calmer, smarter learning workspace.</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="rounded-full p-2 text-slate-100 transition hover:bg-white/10 hover:text-white md:hidden"
+              aria-label="Close navigation"
+            >
+              <XMarkIcon className="h-5 w-5" />
+            </button>
+          </div>
+          <div>
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/70">Appearance</p>
+              <ThemeToggle theme={theme} onToggle={onToggleTheme} className="border-white/20 bg-white/10 text-white hover:bg-white/16" />
+            </div>
+          </div>
+        </div>
+
+        <nav className="flex-1 space-y-2 overflow-y-auto pr-1">
         {navigation.map((item) => (
           <NavLink
             key={item.name}
             to={item.href}
+            onClick={onClose}
             className={({ isActive }) => `${linkClasses} ${isActive ? activeClasses : inactiveClasses}`}
           >
-            <item.icon className="h-6 w-6 mr-3" aria-hidden="true" />
-            {item.name}
+            <div className={`flex h-10 w-10 items-center justify-center rounded-2xl transition ${item.name === 'Dashboard' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200/80'}`}>
+              <item.icon className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <span>{item.name}</span>
           </NavLink>
         ))}
-      </nav>
-      <div className="p-4 border-t border-slate-200 dark:border-slate-700">
-         <div className="flex items-center mb-4">
-          <img src={user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}&background=random`} alt="User avatar" className="h-10 w-10 rounded-full mr-3" />
-          <div>
-            <p className="font-semibold text-sm truncate">{user.displayName || 'Student'}</p>
-            <p className="text-xs text-slate-500 truncate">{user.email}</p>
+        </nav>
+
+        <div className="mt-5 rounded-[1.5rem] border border-slate-200/80 bg-white/85 p-4">
+          <div className="mb-4 flex items-center gap-3">
+            <img
+              src={profile?.photoURL || user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.displayName || user.displayName || 'User')}&background=random`}
+              alt="User avatar"
+              className="h-12 w-12 rounded-2xl object-cover shadow-sm"
+            />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold text-slate-950">{profile?.displayName || user.displayName || 'Student'}</p>
+              <p className="truncate text-xs text-slate-500">{profile?.email || user.email}</p>
+            </div>
           </div>
+          <button onClick={handleSignOut} className="app-button-secondary w-full px-4 py-3 text-sm">
+            <ArrowRightOnRectangleIcon className="h-5 w-5" />
+            Sign Out
+          </button>
         </div>
-        <button onClick={handleSignOut} className="w-full flex items-center justify-center px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition-colors">
-          <ArrowRightOnRectangleIcon className="h-5 w-5 mr-2" />
-          Sign Out
-        </button>
       </div>
     </aside>
   );

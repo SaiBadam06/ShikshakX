@@ -3,7 +3,7 @@ import { apiClient } from '../services/apiClient';
 import type { Material } from '../types';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { DocumentTextIcon, VideoCameraIcon, LinkIcon, Bars3BottomLeftIcon, ListBulletIcon, RectangleStackIcon } from '@heroicons/react/24/solid';
+import { DocumentTextIcon, VideoCameraIcon, LinkIcon, Bars3BottomLeftIcon, ListBulletIcon, RectangleStackIcon, SparklesIcon } from '@heroicons/react/24/solid';
 import type { User } from 'firebase/auth';
 
 interface SummarizeProps {
@@ -18,19 +18,68 @@ const loadingTexts = [
   "Almost there...",
 ];
 
+const FlashcardDeck: React.FC<{ summary: string }> = ({ summary }) => {
+  const [flippedCards, setFlippedCards] = useState<Record<number, boolean>>({});
+
+  const cards = useMemo(
+    () =>
+      summary
+        .split('---')
+        .map((card) => card.trim())
+        .filter(Boolean)
+        .map((card) => {
+          const [term, definition] = card.split('///');
+          if (!term || !definition) {
+            return null;
+          }
+
+          return {
+            term: term.trim(),
+            definition: definition.trim(),
+          };
+        })
+        .filter(Boolean) as { term: string; definition: string }[],
+    [summary],
+  );
+
+  if (!cards.length) {
+    return <p className="text-sm text-slate-500">No flashcards could be generated from this summary.</p>;
+  }
+
+  return (
+    <div className="grid gap-5 md:grid-cols-2">
+      {cards.map((card, index) => {
+        const isFlipped = Boolean(flippedCards[index]);
+
+        return (
+          <button
+            key={`${card.term}-${index}`}
+            type="button"
+            onClick={() => setFlippedCards((current) => ({ ...current, [index]: !current[index] }))}
+            className="flashcard-scene text-left"
+          >
+            <div className={`flashcard-inner ${isFlipped ? 'is-flipped' : ''}`}>
+              <div className="flashcard-face flashcard-front">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Front</p>
+                <h3 className="mt-4 text-xl font-extrabold tracking-tight text-slate-950">{card.term}</h3>
+                <p className="mt-4 text-sm leading-6 text-slate-500">Click to flip and reveal the associated explanation.</p>
+              </div>
+              <div className="flashcard-face flashcard-back">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Back</p>
+                <p className="mt-4 text-base leading-7 text-slate-700">{card.definition}</p>
+              </div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+};
+
 const SummaryDisplay: React.FC<{ summary: string; format: 'paragraph' | 'bullets' | 'flashcards' }> = ({ summary, format }) => {
   const formattedSummary = useMemo(() => {
     if (format === 'flashcards') {
-        return summary.split('---').map((card, index) => {
-            const [term, definition] = card.split('///');
-            if (!definition) return null;
-            return (
-                <div key={index} className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-lg mb-4 shadow-sm">
-                    <p className="font-bold text-slate-800 dark:text-slate-200">{term.trim()}</p>
-                    <p className="mt-2 text-slate-600 dark:text-slate-300">{definition.trim()}</p>
-                </div>
-            );
-        });
+        return <FlashcardDeck summary={summary} />;
     }
 
     return summary.split('\n').map((line, index) => {
@@ -130,10 +179,17 @@ const Summarize: React.FC<SummarizeProps> = ({ user }) => {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
       <div className="lg:col-span-1 space-y-6">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Summarize Materials</h1>
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+        <section className="app-panel-strong hero-gradient rounded-[2rem] p-6">
+          <div className="page-eyebrow mb-4">
+            <SparklesIcon className="h-4 w-4" />
+            Summaries
+          </div>
+          <h1 className="text-3xl font-extrabold tracking-tight text-slate-950">Turn long material into something usable.</h1>
+          <p className="mt-3 text-sm leading-6 text-slate-600">Choose your sources, pick a format, and generate a cleaner view of the ideas that matter.</p>
+        </section>
+        <div className="app-panel-strong rounded-[2rem] p-6">
           <h2 className="text-xl font-semibold mb-4">1. Select Materials</h2>
           <div className="space-y-2 max-h-72 overflow-y-auto pr-2 border-b dark:border-gray-700 pb-4">
             {materials.map(material => {
@@ -161,16 +217,16 @@ const Summarize: React.FC<SummarizeProps> = ({ user }) => {
              {materials.length === 0 && <p className="text-sm text-gray-500 p-3">No materials available. Upload some in the Materials section.</p>}
           </div>
            <h2 className="text-xl font-semibold my-4">2. Choose Format</h2>
-            <div className="flex space-x-2 bg-slate-100 dark:bg-slate-900 p-1 rounded-lg">
-                <button onClick={() => setSummaryFormat('paragraph')} className={`w-full py-2 rounded-md text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${summaryFormat === 'paragraph' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400'}`}><Bars3BottomLeftIcon className="h-5 w-5"/>Paragraph</button>
-                <button onClick={() => setSummaryFormat('bullets')} className={`w-full py-2 rounded-md text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${summaryFormat === 'bullets' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400'}`}><ListBulletIcon className="h-5 w-5"/>Bullets</button>
-                <button onClick={() => setSummaryFormat('flashcards')} className={`w-full py-2 rounded-md text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${summaryFormat === 'flashcards' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400'}`}><RectangleStackIcon className="h-5 w-5"/>Flashcards</button>
+            <div className="flex space-x-2 rounded-2xl bg-slate-100 p-1">
+                <button onClick={() => setSummaryFormat('paragraph')} className={`w-full rounded-[1rem] py-2 text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${summaryFormat === 'paragraph' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600'}`}><Bars3BottomLeftIcon className="h-5 w-5"/>Paragraph</button>
+                <button onClick={() => setSummaryFormat('bullets')} className={`w-full rounded-[1rem] py-2 text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${summaryFormat === 'bullets' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600'}`}><ListBulletIcon className="h-5 w-5"/>Bullets</button>
+                <button onClick={() => setSummaryFormat('flashcards')} className={`w-full rounded-[1rem] py-2 text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${summaryFormat === 'flashcards' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600'}`}><RectangleStackIcon className="h-5 w-5"/>Flashcards</button>
             </div>
 
           <button
             onClick={handleGenerateSummary}
             disabled={isLoading || selectedMaterials.length === 0}
-            className="mt-6 w-full px-6 py-2.5 bg-blue-600 text-white font-medium text-sm rounded-lg hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors"
+            className="app-button-primary mt-6 w-full px-6 py-3 text-sm"
           >
             {isLoading ? 'Summarizing...' : 'Generate Summary'}
           </button>
@@ -178,8 +234,8 @@ const Summarize: React.FC<SummarizeProps> = ({ user }) => {
         </div>
       </div>
       <div className="lg:col-span-2">
-        <div ref={summaryRef} className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md min-h-[30rem] relative">
-          <h2 className="text-2xl font-bold mb-4">Generated Summary</h2>
+        <div ref={summaryRef} className="app-panel-strong relative min-h-[30rem] rounded-[2rem] p-6">
+          <h2 className="mb-4 text-2xl font-extrabold tracking-tight text-slate-950">Generated Summary</h2>
           {isLoading && (
             <div className="absolute inset-0 bg-white/80 dark:bg-gray-800/80 flex flex-col items-center justify-center rounded-lg">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>

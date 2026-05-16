@@ -1,29 +1,23 @@
 import React from 'react';
-import { GOOGLE_API_KEY, GOOGLE_CLIENT_ID } from '../services/calendarClient';
+import { GOOGLE_API_KEY, GOOGLE_CLIENT_ID, isGoogleCalendarConfigured } from '../services/calendarClient';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/solid';
 
 const GoogleCalendarConfigBanner: React.FC = () => {
-  const isConfigured = !GOOGLE_API_KEY.startsWith("YOUR_") && !GOOGLE_CLIENT_ID.startsWith("YOUR_");
-
-  if (isConfigured) {
+  if (isGoogleCalendarConfigured) {
     return null;
   }
 
   return (
-    <div className="p-4 mb-6 text-sm text-yellow-800 rounded-lg bg-yellow-50 dark:bg-slate-900/50 dark:text-yellow-300 border border-yellow-400 dark:border-yellow-600" role="alert">
+    <div className="app-panel mb-6 border-amber-200/70 bg-amber-50/85 p-4 text-sm text-amber-900" role="alert">
       <div className="flex items-center">
         <ExclamationTriangleIcon className="h-5 w-5 mr-3 flex-shrink-0" />
-        <h3 className="text-lg font-medium">Google Calendar Integration Not Configured</h3>
+        <h3 className="text-lg font-semibold">Google Calendar is not connected yet</h3>
       </div>
-      <div className="mt-2 text-sm">
-        <p>To enable syncing tasks with Google Calendar, you need to provide your own API Key and Client ID.</p>
-        <p className="mt-2">Please follow the setup instructions in the <strong>README.md</strong> file (Step 4).</p>
-        <ol className="list-decimal list-inside mt-2 space-y-1">
-          <li>Create API credentials in the Google Cloud Console.</li>
-          <li>Configure the OAuth Consent Screen and add your email as a test user.</li>
-          <li>Update the placeholder values in <strong>`src/services/calendarClient.ts`</strong>.</li>
-          <li>Restart the development server to apply changes.</li>
-        </ol>
+      <div className="mt-3 space-y-2 text-sm leading-6">
+        <p>Task syncing still works locally, but calendar export needs the Google Cloud credentials from your `.env` file.</p>
+        <p>Configured API key: {GOOGLE_API_KEY ? 'Present' : 'Missing'}</p>
+        <p>Configured client ID: {GOOGLE_CLIENT_ID ? 'Present' : 'Missing'}</p>
+        <p>After adding both values in `.env`, restart the app and reconnect Google Calendar.</p>
       </div>
     </div>
   );

@@ -6,30 +6,31 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  size?: 'default' | 'wide';
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 'default' }) => {
   if (!isOpen) return null;
 
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 backdrop-blur-md"
       onClick={onClose}
     >
       <div
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg m-4 transform transition-all"
+        className={`app-panel-strong w-full overflow-hidden ${size === 'wide' ? 'max-w-4xl' : 'max-w-2xl'}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
+        <div className="flex items-center justify-between border-b border-slate-200/80 px-6 py-5">
+          <h3 className="text-xl font-bold tracking-tight text-slate-950">{title}</h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full p-1.5"
+            className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-800"
           >
             <XMarkIcon className="h-6 w-6" />
           </button>
         </div>
-        <div className="p-6">
+        <div className="p-6 md:p-7">
           {children}
         </div>
       </div>

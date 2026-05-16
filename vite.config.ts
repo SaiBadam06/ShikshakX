@@ -18,6 +18,43 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks(id) {
+              if (!id.includes('node_modules')) {
+                return undefined;
+              }
+
+              if (id.includes('firebase/firestore')) {
+                return 'firebase-firestore';
+              }
+
+              if (id.includes('firebase/auth')) {
+                return 'firebase-auth';
+              }
+
+              if (id.includes('firebase/app')) {
+                return 'firebase-core';
+              }
+
+              if (id.includes('react') || id.includes('scheduler')) {
+                return 'react';
+              }
+
+              if (id.includes('groq-sdk') || id.includes('@google/genai')) {
+                return 'ai';
+              }
+
+              if (id.includes('@heroicons') || id.includes('antd') || id.includes('@ant-design/icons')) {
+                return 'ui';
+              }
+
+              return 'vendor';
+            },
+          },
+        },
       }
     };
 });

@@ -34,9 +34,9 @@ const icons: Record<ToastType, React.ElementType> = {
 };
 
 const colors: Record<ToastType, string> = {
-  success: 'bg-green-500',
-  error: 'bg-red-500',
-  info: 'bg-blue-500',
+  success: 'border-emerald-200/80 bg-white text-slate-900',
+  error: 'border-red-200/80 bg-white text-slate-900',
+  info: 'border-blue-200/80 bg-white text-slate-900',
 };
 
 export const ToastContainer: React.FC = () => {
@@ -61,17 +61,19 @@ export const ToastContainer: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 space-y-3">
+    <div className="pointer-events-none fixed right-4 top-4 z-50 space-y-3 sm:right-6 sm:top-6">
       {toasts.map(t => {
         const Icon = icons[t.type];
         return (
           <div
             key={t.id}
-            className={`flex items-center text-white px-4 py-3 rounded-lg shadow-lg ${colors[t.type]}`}
+            className={`pointer-events-auto flex min-w-[18rem] max-w-sm items-start gap-3 rounded-[1.35rem] border px-4 py-3 shadow-[0_18px_50px_rgba(15,23,42,0.12)] backdrop-blur-xl ${colors[t.type]}`}
           >
-            <Icon className="h-6 w-6 mr-3" />
-            <p className="flex-1">{t.message}</p>
-            <button onClick={() => removeToast(t.id)} className="ml-4 p-1 rounded-full hover:bg-white/20">
+            <div className={`mt-0.5 rounded-full p-1.5 ${t.type === 'success' ? 'bg-emerald-50 text-emerald-600' : t.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+              <Icon className="h-5 w-5" />
+            </div>
+            <p className="flex-1 text-sm font-medium leading-6">{t.message}</p>
+            <button onClick={() => removeToast(t.id)} className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700">
               &times;
             </button>
           </div>

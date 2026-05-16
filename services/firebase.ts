@@ -9,6 +9,11 @@ import {
   browserSessionPersistence
 } from "firebase/auth";
 import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
+
+const hasConfiguredValue = (value?: string) =>
+  Boolean(value && !/^your_|^replace_|placeholder/i.test(value));
+
 // Firebase configuration from environment variables
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -18,15 +23,25 @@ const firebaseConfig = {
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
+
+export const isFirebaseConfigured = Object.values(firebaseConfig).every((value) => hasConfiguredValue(value));
+
 // Initialize Firebase
 let app;
+
 let auth;
 let db;
+let storage;
 let googleProvider;
 try {
+  if (!isFirebaseConfigured) {
+    console.warn('Firebase is not fully configured. Authentication and database features will remain unavailable until the environment variables are set.');
+  }
+
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
   db = getFirestore(app);
+  storage = getStorage(app);
   googleProvider = new GoogleAuthProvider();
   // Enable offline persistence
   enableIndexedDbPersistence(db).catch((err) => {
@@ -60,6 +75,7 @@ export {
   app, 
   auth, 
   db, 
+  storage,
   firebaseConfig, 
   googleProvider, 
   signInWithPopup, 
